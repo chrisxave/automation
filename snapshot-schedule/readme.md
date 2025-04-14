@@ -1,5 +1,7 @@
 # **Snapshot CronJob Deployment for KubeVirt Virtual Machine**
 
+> **Tested on OpenShift Container Platform (OCP) 4.18**
+
 ## **Files Overview**
 
 1. **`variables.env`**  
