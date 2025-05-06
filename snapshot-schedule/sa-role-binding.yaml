@@ -1,14 +1,15 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{SERVICE_ACCOUNT}}
-  namespace: {{NAMESPACE}}
+  name: vm-snapshotter  #  Define a consistent name
+  namespace: <insert namespace here> #  Use your target namespace
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: snapshot-role
-  namespace: {{NAMESPACE}}
+  name: vm-snapshot-role
+  namespace: <insert namespace here>
 rules:
   - apiGroups: ["snapshot.kubevirt.io"]
     resources: ["virtualmachinesnapshots"]
@@ -23,13 +24,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: snapshot-rolebinding
-  namespace: {{NAMESPACE}}
+  name: vm-snapshot-rolebinding
+  namespace: <insert namespace here>
 subjects:
   - kind: ServiceAccount
-    name: {{SERVICE_ACCOUNT}}
-    namespace: {{NAMESPACE}}
+    name: vm-snapshotter  #  Reference the consistent name
+    namespace: <insert namespace here>
 roleRef:
   kind: Role
-  name: snapshot-role
+  name: vm-snapshot-role
   apiGroup: rbac.authorization.k8s.io
