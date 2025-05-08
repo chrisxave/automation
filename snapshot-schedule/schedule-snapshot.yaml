@@ -1,55 +1,73 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: snapshot-{{VM_NAME}}
-  namespace: {{NAMESPACE}}
+  name: snapshot-$(VM_NAME)
+  namespace: $(NAMESPACE)
 spec:
-  schedule: "{{SCHEDULE}}"
+  schedule: $(SCHEDULE)
   jobTemplate:
     spec:
       template:
         spec:
-          serviceAccountName: {{SERVICE_ACCOUNT}}
+          serviceAccountName: vm-snapshotter
           containers:
             - name: snapshot
               image: quay.io/openshift/origin-cli:4.18
+              env:
+                - name: VM_NAME
+                  valueFrom:
+                    configMapKeyRef:
+                      name: autosnapshot-$(VM_NAME)-config # Dynamic ConfigMap name
+                      key: VM_NAME
+                - name: NAMESPACE
+                  valueFrom:
+                    configMapKeyRef:
+                      name: autosnapshot-$(VM_NAME)-config # Dynamic ConfigMap name
+                      key: NAMESPACE
+                - name: SCHEDULE
+                  valueFrom:
+                    configMapKeyRef:
+                      name: autosnapshot-$(VM_NAME)-config # Dynamic ConfigMap name
+                      key: SCHEDULE
+                - name: RETENTION
+                  valueFrom:
+                    configMapKeyRef:
+                      name: autosnapshot-$(VM_NAME)-config # Dynamic ConfigMap name
+                      key: RETENTION
               command:
                 - /bin/sh
                 - -c
                 - |
-                    set -e
-                    export HOME=/tmp  # oc needs this
-                    DATE=$(date +%Y%m%d-%H%M%S)
-                    SNAPSHOT_NAME="{{VM_NAME}}-snapshot-$DATE"
-                    echo "Creating snapshot: $SNAPSHOT_NAME"
-                    cat <<EOF | oc apply -f -
-                    apiVersion: snapshot.kubevirt.io/v1beta1
-                    kind: VirtualMachineSnapshot
-                    metadata:
-                      name: $SNAPSHOT_NAME
-                      namespace: {{NAMESPACE}}
-                      labels:
-                        kubevirt.io/snapshot-source-name: {{VM_NAME}}
-                    spec:
-                      source:
-                        apiGroup: kubevirt.io
-                        kind: VirtualMachine
-                        name: {{VM_NAME}}
-                    EOF
-                    echo "Applying retention policy: keep only \$RETENTION latest snapshots"
-                    # Get snapshot names sorted by creationTimestamp (descending)
-                    SNAPSHOTS=$(oc get vmsnapshot -n {{NAMESPACE}} -l kubevirt.io/snapshot-source-name={{VM_NAME}} --sort-by=.metadata.creationTimestamp -o custom-columns=NAME:.metadata.name --no-headers | tac)
-                    COUNT=0
-                    for SNAP in $SNAPSHOTS; do
-                      COUNT=$((COUNT + 1))
-                      if [ "$COUNT" -gt "$RETENTION" ]; then
-                        echo "Deleting old snapshot: $SNAP"
-                        oc delete vmsnapshot "$SNAP" -n {{NAMESPACE}} || true
-                      fi
-                    done
-              env:
-                - name: RETENTION
-                  value: "{{RETENTION}}"
+                  set -e
+                  export HOME=/tmp
+                  DATE=$(date +%Y%m%d-%H%M%S)
+                  SNAPSHOT_NAME="$(VM_NAME)-snapshot-$DATE"
+                  echo "Creating snapshot: $SNAPSHOT_NAME"
+                  cat <<EOF | oc apply -f -
+                  apiVersion: snapshot.kubevirt.io/v1beta1
+                  kind: VirtualMachineSnapshot
+                  metadata:
+                    name: $SNAPSHOT_NAME
+                    namespace: $(NAMESPACE)
+                    labels:
+                      kubevirt.io/snapshot-source-name: $(VM_NAME)
+                  spec:
+                    source:
+                      apiGroup: kubevirt.io
+                      kind: VirtualMachine
+                      name: $(VM_NAME)
+                  EOF
+                  echo "Applying retention policy: keep only \$RETENTION latest snapshots"
+                  # Get snapshot names sorted by creationTimestamp (descending)
+                  SNAPSHOTS=$(oc get vmsnapshot -n $(NAMESPACE) -l kubevirt.io/snapshot-source-name=$(VM_NAME) --sort-by=.metadata.creationTimestamp -o custom-columns=NAME:.metadata.name --no-headers | tac)
+                  COUNT=0
+                  for SNAP in $SNAPSHOTS; do
+                    COUNT=$((COUNT + 1))
+                    if [ "$COUNT" -gt "$RETENTION" ]; then
+                      echo "Deleting old snapshot: $SNAP"
+                      oc delete vmsnapshot "$SNAP" -n $(NAMESPACE) || true
+                  fi
+                done
               resources:
                 requests:
                   memory: "64Mi"
@@ -57,4 +75,4 @@ spec:
                 limits:
                   memory: "128Mi"
                   cpu: "250m"
-          restartPolicy: OnFailure
+              restartPolicy: OnFailure
